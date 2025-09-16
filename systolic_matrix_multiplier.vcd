@@ -5,7 +5,7 @@ $version
 	Icarus Verilog
 $end
 $timescale
-	1s
+	1000000000ns
 $end
 $scope module tb_systolic_matrix_multiplier $end
 $var wire 512 ! result_c_tb [511:0] $end
