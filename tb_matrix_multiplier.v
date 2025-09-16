@@ -73,7 +73,7 @@ module tb_matrix_multiplier;
     // Main test sequence
     initial begin
         $display("-------------------------------------------");
-        $display("Starting Matrix Multiplication Testbench");
+        $display("Starting 8x8 Matrix Multiplication Testbench");
         $display("-------------------------------------------");
 
         // Initialize
