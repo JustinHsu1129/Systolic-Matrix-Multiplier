@@ -1,0 +1,23 @@
+{
+  "DESIGN_NAME": "systolic_top",
+
+  "VERILOG_FILES": [
+    "dir::systolic_matrix_multiplier.v",
+    "dir::systolic_top_level.v"
+  ],
+
+  "CLOCK_PORT": "clk",
+  "CLOCK_PERIOD": 25,
+
+  "PLATFORM": "sky130",
+  "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
+
+  "FP_CORE_UTIL": 30,
+  "DIE_AREA": "0 0 2500 2500",
+  "PL_TARGET_DENSITY": 0.31,
+  "GRT_ADJUSTMENT": 0.2 ,
+
+  "SYNTH_STRATEGY": "DELAY 0",
+  "SYNTH_BUFFERING": "1",
+  "SYNTH_SIZING": "1"
+}
