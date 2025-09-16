@@ -93,7 +93,7 @@ module tb_matrix_multiplier;
         $readmemh("ram_b_init.txt", matrix_b_tb);
         $display("Time: %0t ns | Matrices A and B initialized.", $time);
 
-        // Calculate the expected result (The "Golden Model")
+        // Calculate the expected result
         for (i = 0; i < M; i = i + 1) begin
             for (j = 0; j < P; j = j + 1) begin
                 temp_sum = 0;
@@ -105,7 +105,7 @@ module tb_matrix_multiplier;
                 expected_c[i][j] = temp_sum[DATA_WIDTH-1:0];
             end
         end
-        $display("Time: %0t ns | Golden model calculated the expected result.", $time);
+        $display("Time: %0t ns | Expected model calculated the expected result.", $time);
 
         // Start the DUT
         #10;
@@ -121,7 +121,7 @@ module tb_matrix_multiplier;
         #1;
         $display("Time: %0t ns | DUT finished. 'done' signal received.", $time);
 
-        // Compare the DUT's result with the golden model
+        // Compare the DUT's result with the expected
         error_count = 0;
         for (i = 0; i < M; i = i + 1) begin
             for (j = 0; j < P; j = j + 1) begin

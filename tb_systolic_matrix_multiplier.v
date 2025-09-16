@@ -91,7 +91,7 @@ module tb_systolic_matrix_multiplier;
         $display("Matrix A[0:3]: %d, %d, %d, %d", matrix_a_tb[0], matrix_a_tb[1], matrix_a_tb[2], matrix_a_tb[3]);
         $display("Matrix B[0:3]: %d, %d, %d, %d", matrix_b_tb[0], matrix_b_tb[1], matrix_b_tb[2], matrix_b_tb[3]);
 
-        // Calculate the expected result (The "Golden Model")
+        // Calculate the expected result
         for (i = 0; i < M; i = i + 1) begin
             for (j = 0; j < P; j = j + 1) begin
                 temp_sum = 0;
@@ -103,7 +103,7 @@ module tb_systolic_matrix_multiplier;
                 expected_c[i][j] = temp_sum[DATA_WIDTH-1:0];
             end
         end
-        $display("Time: %0t ns | Golden model calculated the expected result.", $time);
+        $display("Time: %0t ns | Expected calculated the expected result.", $time);
         $display("Expected C[0][0] = %d, C[0][1] = %d", expected_c[0][0], expected_c[0][1]);
 
         // Start the DUT
@@ -120,7 +120,7 @@ module tb_systolic_matrix_multiplier;
         #10;
         $display("Time: %0t ns | Systolic array finished. 'done' signal received.", $time);
 
-        // Compare the DUT's result with the golden model
+        // Compare the DUT's result with the expected
         error_count = 0;
         for (i = 0; i < M; i = i + 1) begin
             for (j = 0; j < P; j = j + 1) begin
