@@ -17,7 +17,7 @@ module matrix_multiplier (
     output reg [M*P*DATA_WIDTH-1:0] result_c;
 
     // Internal registers and wires
-    parameter C_DATA_WIDTH = 2 * DATA_WIDTH + 4; // Using 4 instead of $clog2(N) for simplicity
+    parameter C_DATA_WIDTH = 2 * DATA_WIDTH + 4;
     reg [C_DATA_WIDTH-1:0] sum;
 
     // State machine definition
@@ -49,7 +49,7 @@ module matrix_multiplier (
     assign b_index = k * P + j;
     assign c_index = i * P + j;
 
-    // Extract matrix elements
+    // Get matrix
     always @(*) begin
         a_val = matrix_a[(a_index * DATA_WIDTH) +: DATA_WIDTH];
         b_val = matrix_b[(b_index * DATA_WIDTH) +: DATA_WIDTH];
@@ -87,7 +87,7 @@ module matrix_multiplier (
         endcase
     end
 
-    // Main calculation logic
+    // Main calculation
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             i <= 0;
@@ -109,7 +109,7 @@ module matrix_multiplier (
 
                 // Store result when we've completed the dot product
                 if (k == N-1) begin
-                    c_array[c_index] <= sum + $signed(a_val) * $signed(b_val); // Add final term
+                    c_array[c_index] <= sum + $signed(a_val) * $signed(b_val);
                 end
 
                 // Update counters after calculations
@@ -137,7 +137,7 @@ module matrix_multiplier (
         end
     end
     
-    // Pack the result array back into result_c
+    // Put the result array back into result_c
     always @(*) begin
         for (pack_idx = 0; pack_idx < M*P; pack_idx = pack_idx + 1) begin
             result_c[(pack_idx * DATA_WIDTH) +: DATA_WIDTH] = c_array[pack_idx];

@@ -16,7 +16,7 @@ module systolic_top (
     parameter N = 8;
     parameter P = 8;
 
-    // Internal wire for multiplier output
+    
     wire [DATA_WIDTH-1:0] result_c_wire;
 
     // Instantiate BRAMs

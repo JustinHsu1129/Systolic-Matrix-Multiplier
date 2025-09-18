@@ -58,13 +58,13 @@ module tb_matrix_multiplier;
         .result_c(result_c_tb)
     );
 
-    // Clock generation (100 MHz)
+    // Clock generation
     initial begin
         clk = 0;
         forever #5 clk = ~clk;
     end
 
-    // Main test sequence
+    
     initial begin
         $display("-------------------------------------------");
         $display("Starting 8x8 Matrix Multiplication Testbench");
@@ -72,22 +72,13 @@ module tb_matrix_multiplier;
 
         // Initialize
         rst = 1;
-        start = 0;
+        start = 0;        
         
-        // Initialize matrices with simple test pattern if files don't exist
-        for (i = 0; i < M*N; i = i + 1) begin
-            matrix_a_tb[i] = i % 16; // Simple pattern
-        end
-        for (i = 0; i < N*P; i = i + 1) begin
-            matrix_b_tb[i] = (i + 1) % 16; // Simple pattern
-        end
-        
-        // Try to read input matrices from files (if they exist)
         $readmemh("ram_a_init.txt", matrix_a_tb);
         $readmemh("ram_b_init.txt", matrix_b_tb);
         $display("Time: %0t ns | Matrices A and B initialized.", $time);
 
-        // Calculate the expected result
+        // Calculate
         for (i = 0; i < M; i = i + 1) begin
             for (j = 0; j < P; j = j + 1) begin
                 temp_sum = 0;
@@ -101,7 +92,7 @@ module tb_matrix_multiplier;
         end
         $display("Time: %0t ns | Expected model calculated the expected result.", $time);
 
-        // Start the DUT
+        
         #10;
         rst = 0;
         #10;
@@ -110,12 +101,12 @@ module tb_matrix_multiplier;
         start = 0;
         $display("Time: %0t ns | Start pulse sent to DUT. Waiting for completion...", $time);
 
-        // Wait for the DUT to signal it's finished
+        
         wait (done);
         #1;
         $display("Time: %0t ns | DUT finished. 'done' signal received.", $time);
 
-        // Compare the DUT's result with the expected
+        // Compare
         error_count = 0;
         for (i = 0; i < M; i = i + 1) begin
             for (j = 0; j < P; j = j + 1) begin

@@ -1,9 +1,9 @@
 module bram #(
     parameter DATA_WIDTH = 8,
-    parameter ADDR_WIDTH = 10   // depth = 2^ADDR_WIDTH
+    parameter ADDR_WIDTH = 10   
 )(
     input clk,
-    input we,                             // write enable
+    input we,                             
     input [ADDR_WIDTH-1:0] addr,
     input [DATA_WIDTH-1:0] din,
     output reg [DATA_WIDTH-1:0] dout
@@ -26,7 +26,7 @@ module processing_element (
     input signed [7:0] b_in,
     output reg signed [7:0] a_out,
     output reg signed [7:0] b_out,
-    output signed [15:0] c_sum_out // Output the internal sum
+    output signed [15:0] c_sum_out 
 );
     // Each PE has its own internal accumulator
     reg signed [15:0] c_sum;
@@ -35,17 +35,16 @@ module processing_element (
         if (rst) begin
             a_out <= 8'sd0;
             b_out <= 8'sd0;
-            c_sum <= 16'sd0; // Reset internal sum
+            c_sum <= 16'sd0; 
         end else begin
-            // Pass A and B values through
+            
             a_out <= a_in;
             b_out <= b_in;
-            // Accumulate the product INTERNALLY
+            
             c_sum <= c_sum + (a_in * b_in);
         end
     end
 
-    // Continuously output the current sum
     assign c_sum_out = c_sum;
 
 endmodule
@@ -79,10 +78,10 @@ module systolic_matrix_multiplier #(
     wire signed [DATA_WIDTH-1:0] a_mem [0:M-1][0:N-1];
     wire signed [DATA_WIDTH-1:0] b_mem [0:N-1][0:P-1];
 
-    // Systolic array interconnections
+    // Interconnections
     wire signed [DATA_WIDTH-1:0] a_h [0:M-1][0:P];
     wire signed [DATA_WIDTH-1:0] b_v [0:M][0:P-1];
-    // Wire array to capture final results from each PE
+    
     wire signed [15:0] c_result_wires [0:M-1][0:P-1];
 
     reg signed [DATA_WIDTH-1:0] a_input [0:M-1];
@@ -95,7 +94,7 @@ module systolic_matrix_multiplier #(
     generate
         for (row = 0; row < M; row = row + 1) begin : pe_rows
             for (col = 0; col < P; col = col + 1) begin : pe_cols
-                // MODIFICATION: Instantiate the new PE
+               
                 processing_element pe_inst (
                     .clk(clk),
                     .rst(rst),
@@ -103,7 +102,7 @@ module systolic_matrix_multiplier #(
                     .b_in(b_v[row][col]),
                     .a_out(a_h[row][col+1]),
                     .b_out(b_v[row+1][col]),
-                    // Connect the PE's result directly to a result wire
+                    
                     .c_sum_out(c_result_wires[row][col])
                 );
             end
@@ -116,7 +115,7 @@ module systolic_matrix_multiplier #(
         for (col = 0; col < P; col = col + 1) assign b_v[0][col] = b_input[col];
     endgenerate
 
-    // Unpack flattened input vectors into 2D wire arrays
+    // Put vectors into 2D arrays
     genvar unpack_i, unpack_j;
     generate
         for (unpack_i = 0; unpack_i < M; unpack_i = unpack_i + 1) begin
@@ -142,7 +141,7 @@ module systolic_matrix_multiplier #(
         done = 1'b0;
         case (state)
             S_IDLE: if (start) next_state = S_COMPUTE;
-            // Wait for all data to pass through the array
+            
             S_COMPUTE: if (cycle_count >= (M + N + P - 2)) next_state = S_DONE;
             S_DONE: begin
                 done = 1'b1;
@@ -152,7 +151,7 @@ module systolic_matrix_multiplier #(
         endcase
     end
 
-    // Control logic and data feeding
+    // Control logic
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             cycle_count <= 0;
@@ -178,7 +177,7 @@ module systolic_matrix_multiplier #(
         end
     end
 
-    // Pack results from PE outputs to the final flattened output vector
+    // Put results into output vector
     genvar pack_i, pack_j;
     generate
         for (pack_i = 0; pack_i < M; pack_i = pack_i + 1) begin

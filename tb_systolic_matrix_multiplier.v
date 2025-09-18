@@ -24,7 +24,6 @@ module tb_systolic_matrix_multiplier;
     reg signed [DATA_WIDTH-1:0] matrix_b_tb [0:N*P-1];
     reg signed [DATA_WIDTH-1:0] expected_c [0:M-1][0:P-1];
     
-    // Declare integers outside always blocks
     integer pack_i;
     integer i, j, k;
     reg signed [C_DATA_WIDTH-1:0] temp_sum;
@@ -32,7 +31,6 @@ module tb_systolic_matrix_multiplier;
     integer error_count;
     reg signed [DATA_WIDTH-1:0] dut_val;
     
-    // Pack the matrices for the DUT
     always @(*) begin
         for (pack_i = 0; pack_i < M*N; pack_i = pack_i + 1) begin
             matrix_a_packed[pack_i*DATA_WIDTH +: DATA_WIDTH] = matrix_a_tb[pack_i];
@@ -58,13 +56,12 @@ module tb_systolic_matrix_multiplier;
         .result_c(result_c_tb)
     );
 
-    // Clock generation (100 MHz)
+    // Clock generation
     initial begin
         clk = 0;
         forever #5 clk = ~clk;
     end
 
-    // Main test sequence
     initial begin
         $display("-------------------------------------------");
         $display("Starting 8x8 Systolic Matrix Multiplication Testbench");
@@ -74,15 +71,6 @@ module tb_systolic_matrix_multiplier;
         rst = 1;
         start = 0;
         
-        // Initialize matrices with simple test pattern
-        for (i = 0; i < M*N; i = i + 1) begin
-            matrix_a_tb[i] = (i % 16) - 8; // Values from -8 to 7
-        end
-        for (i = 0; i < N*P; i = i + 1) begin
-            matrix_b_tb[i] = ((i + 1) % 16) - 8; // Values from -7 to 8
-        end
-        
-        // Try to read input matrices from files (if they exist)
         $readmemh("ram_a_init.txt", matrix_a_tb);
         $readmemh("ram_b_init.txt", matrix_b_tb);
         $display("Time: %0t ns | Matrices A and B initialized.", $time);
@@ -91,7 +79,6 @@ module tb_systolic_matrix_multiplier;
         $display("Matrix A[0:3]: %d, %d, %d, %d", matrix_a_tb[0], matrix_a_tb[1], matrix_a_tb[2], matrix_a_tb[3]);
         $display("Matrix B[0:3]: %d, %d, %d, %d", matrix_b_tb[0], matrix_b_tb[1], matrix_b_tb[2], matrix_b_tb[3]);
 
-        // Calculate the expected result
         for (i = 0; i < M; i = i + 1) begin
             for (j = 0; j < P; j = j + 1) begin
                 temp_sum = 0;
@@ -115,12 +102,11 @@ module tb_systolic_matrix_multiplier;
         start = 0;
         $display("Time: %0t ns | Start pulse sent to systolic array. Waiting for completion...", $time);
 
-        // Wait for the DUT to signal it's finished
         wait (done);
         #10;
         $display("Time: %0t ns | Systolic array finished. 'done' signal received.", $time);
 
-        // Compare the DUT's result with the expected
+        // Compare results
         error_count = 0;
         for (i = 0; i < M; i = i + 1) begin
             for (j = 0; j < P; j = j + 1) begin
