@@ -1,5 +1,3 @@
-// NOTE: This file is now fully Verilog-compatible (use .v extension)
-
 module matrix_multiplier (
     clk, rst, start, matrix_a, matrix_b, done, result_c
 );

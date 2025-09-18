@@ -1,0 +1,16 @@
+# Ignore OpenLane run results
+runs/
+
+# Ignore build artifacts
+*.log
+*.rpt
+*.sdc
+*.def
+*.gds
+*.odb
+*.spef
+*.vcd
+
+# Ignore temporary files
+*.swp
+*.tmp
