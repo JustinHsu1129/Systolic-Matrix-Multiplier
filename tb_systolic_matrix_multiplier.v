@@ -121,9 +121,9 @@ module tb_systolic_matrix_multiplier;
         end
 
         if (error_count == 0) begin
-            $display("\nSUCCESS: All %0d elements match the expected result! ✅", M*P);
+            $display("\nSUCCESS: All %0d elements match the expected result!", M*P);
         end else begin
-            $display("\nFAILURE: Found %0d mismatches. ❌", error_count);
+            $display("\nFAILURE: Found %0d mismatches.", error_count);
         end
         
         $display("-------------------------------------------");
