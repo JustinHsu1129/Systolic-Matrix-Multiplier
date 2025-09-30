@@ -1,147 +1,190 @@
-module systolic_matrix_multiplier (
+module bram #(
+    parameter DATA_WIDTH = 8,
+    parameter ADDR_WIDTH = 10   
+)(
+    input clk,
+    input we,                             
+    input [ADDR_WIDTH-1:0] addr,
+    input [DATA_WIDTH-1:0] din,
+    output reg [DATA_WIDTH-1:0] dout
+);
+    // Memory array
+    reg [DATA_WIDTH-1:0] mem [(1<<ADDR_WIDTH)-1:0];
+
+    always @(posedge clk) begin
+        if (we) begin
+            mem[addr] <= din;            // write
+        end
+        dout <= mem[addr];               // read (sync)
+    end
+endmodule
+
+module processing_element (
+    input clk,
+    input rst,
+    input signed [7:0] a_in,
+    input signed [7:0] b_in,
+    output reg signed [7:0] a_out,
+    output reg signed [7:0] b_out,
+    output signed [15:0] c_sum_out 
+);
+    // Each PE has its own internal accumulator
+    reg signed [15:0] c_sum;
+
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            a_out <= 8'sd0;
+            b_out <= 8'sd0;
+            c_sum <= 16'sd0; 
+        end else begin
+            
+            a_out <= a_in;
+            b_out <= b_in;
+            
+            c_sum <= c_sum + (a_in * b_in);
+        end
+    end
+
+    assign c_sum_out = c_sum;
+
+endmodule
+
+module systolic_matrix_multiplier #(
+    parameter DATA_WIDTH = 8,
+    parameter M = 8,
+    parameter N = 8,
+    parameter P = 8
+)(
     clk, rst, start, matrix_a, matrix_b, done, result_c
 );
-
-    // Parameters
-    parameter DATA_WIDTH = 8;
-    parameter M = 8; // Rows of matrix A and C
-    parameter N = 8; // Cols of matrix A and Rows of matrix B
-    parameter P = 8; // Cols of matrix B and C
-
     input clk;
     input rst;
     input start;
     input [M*N*DATA_WIDTH-1:0] matrix_a;
     input [N*P*DATA_WIDTH-1:0] matrix_b;
     output reg done;
-    output reg [M*P*DATA_WIDTH-1:0] result_c;
+    output [M*P*DATA_WIDTH-1:0] result_c;
 
-    // Internal registers and wires
-    parameter C_DATA_WIDTH = 2 * DATA_WIDTH + 4; // Using 4 instead of $clog2(N) for simplicity
-    reg [C_DATA_WIDTH-1:0] sum;
+    wire [M*P*DATA_WIDTH-1:0] result_c;
 
-    // State machine definition
-    parameter S_IDLE = 2'b00;
-    parameter S_CALC = 2'b01;
-    parameter S_DONE = 2'b10;
+    // Simplified state machine
+    localparam S_IDLE = 2'b00;
+    localparam S_COMPUTE = 2'b01;
+    localparam S_DONE = 2'b10;
 
     reg [1:0] state, next_state;
+    reg [7:0] cycle_count;
 
-    // Loop counters
-    reg [2:0] i;  // For 8x8, need 3 bits
-    reg [2:0] j;
-    reg [2:0] k;
-    
-    // Temporary variables for matrix access
-    reg signed [DATA_WIDTH-1:0] a_val, b_val;
-    reg signed [DATA_WIDTH-1:0] c_array [0:M*P-1];
-    
-    // Index calculation wires
-    wire [5:0] a_index; // 6 bits for up to 64 elements
-    wire [5:0] b_index;
-    wire [5:0] c_index;
-    
-    // Declare integer outside always blocks
-    integer init_idx;
-    integer pack_idx;
-    
-    assign a_index = i * N + k;
-    assign b_index = k * P + j;
-    assign c_index = i * P + j;
+    wire signed [DATA_WIDTH-1:0] a_mem [0:M-1][0:N-1];
+    wire signed [DATA_WIDTH-1:0] b_mem [0:N-1][0:P-1];
 
-    // Extract matrix elements
-    always @(*) begin
-        a_val = matrix_a[(a_index * DATA_WIDTH) +: DATA_WIDTH];
-        b_val = matrix_b[(b_index * DATA_WIDTH) +: DATA_WIDTH];
-    end
+    // Interconnections
+    wire signed [DATA_WIDTH-1:0] a_h [0:M-1][0:P];
+    wire signed [DATA_WIDTH-1:0] b_v [0:M][0:P-1];
+    
+    wire signed [15:0] c_result_wires [0:M-1][0:P-1];
 
-    // Sequential logic for state transitions
-    always @(posedge clk or posedge rst) begin
-        if (rst) begin
-            state <= S_IDLE;
-        end else begin
-            state <= next_state;
+    reg signed [DATA_WIDTH-1:0] a_input [0:M-1];
+    reg signed [DATA_WIDTH-1:0] b_input [0:P-1];
+    reg [7:0] input_cycle;
+    integer init_i, init_j;
+
+    // Generate the M x P systolic array
+    genvar row, col;
+    generate
+        for (row = 0; row < M; row = row + 1) begin : pe_rows
+            for (col = 0; col < P; col = col + 1) begin : pe_cols
+               
+                processing_element pe_inst (
+                    .clk(clk),
+                    .rst(rst),
+                    .a_in(a_h[row][col]),
+                    .b_in(b_v[row][col]),
+                    .a_out(a_h[row][col+1]),
+                    .b_out(b_v[row+1][col]),
+                    
+                    .c_sum_out(c_result_wires[row][col])
+                );
+            end
         end
+    endgenerate
+
+    // Connect inputs to the systolic array's edges
+    generate
+        for (row = 0; row < M; row = row + 1) assign a_h[row][0] = a_input[row];
+        for (col = 0; col < P; col = col + 1) assign b_v[0][col] = b_input[col];
+    endgenerate
+
+    // Put vectors into 2D arrays
+    genvar unpack_i, unpack_j;
+    generate
+        for (unpack_i = 0; unpack_i < M; unpack_i = unpack_i + 1) begin
+            for (unpack_j = 0; unpack_j < N; unpack_j = unpack_j + 1) begin
+                assign a_mem[unpack_i][unpack_j] = matrix_a[((unpack_i*N + unpack_j)*DATA_WIDTH + DATA_WIDTH-1) : (unpack_i*N + unpack_j)*DATA_WIDTH];
+            end
+        end
+        for (unpack_i = 0; unpack_i < N; unpack_i = unpack_i + 1) begin
+            for (unpack_j = 0; unpack_j < P; unpack_j = unpack_j + 1) begin
+                assign b_mem[unpack_i][unpack_j] = matrix_b[((unpack_i*P + unpack_j)*DATA_WIDTH + DATA_WIDTH-1) : (unpack_i*P + unpack_j)*DATA_WIDTH];
+            end
+        end
+    endgenerate
+
+    // State machine logic
+    always @(posedge clk or posedge rst) begin
+        if (rst) state <= S_IDLE;
+        else state <= next_state;
     end
 
-    // Combinational logic for state machine
-    always @(*) begin
+    always @(state or start or cycle_count) begin
         next_state = state;
         done = 1'b0;
-        
         case (state)
-            S_IDLE: begin
-                if (start) begin
-                    next_state = S_CALC;
-                end
-            end
-            S_CALC: begin
-                if (i == M-1 && j == P-1 && k == N-1) begin
-                    next_state = S_DONE;
-                end
-            end
+            S_IDLE: if (start) next_state = S_COMPUTE;
+            
+            S_COMPUTE: if (cycle_count >= (M + N + P - 2)) next_state = S_DONE;
             S_DONE: begin
                 done = 1'b1;
                 next_state = S_IDLE;
             end
+            default: next_state = S_IDLE;
         endcase
     end
 
-    // Main calculation logic
+    // Control logic
     always @(posedge clk or posedge rst) begin
         if (rst) begin
-            i <= 0;
-            j <= 0;
-            k <= 0;
-            sum <= 0;
-            // Initialize c_array to 0
-            for (init_idx = 0; init_idx < M*P; init_idx = init_idx + 1) begin
-                c_array[init_idx] <= 0;
-            end
+            cycle_count <= 0;
+            input_cycle <= 0;
+            for (init_i = 0; init_i < M; init_i = init_i + 1) a_input[init_i] <= 8'sd0;
+            for (init_j = 0; init_j < P; init_j = init_j + 1) b_input[init_j] <= 8'sd0;
         end else begin
-            if (state == S_CALC) begin
-                // Update sum first based on current k value
-                if (k == 0) begin
-                    sum <= $signed(a_val) * $signed(b_val);
-                end else begin
-                    sum <= sum + $signed(a_val) * $signed(b_val);
+            if (state == S_IDLE && start) begin
+                cycle_count <= 0;
+                input_cycle <= 0;
+            end else if (state == S_COMPUTE) begin
+                cycle_count <= cycle_count + 1;
+                input_cycle <= input_cycle + 1;
+                for (init_i = 0; init_i < M; init_i = init_i + 1) begin
+                    if (input_cycle >= init_i && input_cycle < N + init_i) a_input[init_i] <= a_mem[init_i][input_cycle - init_i];
+                    else a_input[init_i] <= 8'sd0;
                 end
-
-                // Store result when we've completed the dot product
-                if (k == N-1) begin
-                    c_array[c_index] <= sum + $signed(a_val) * $signed(b_val); // Add final term
+                for (init_j = 0; init_j < P; init_j = init_j + 1) begin
+                    if (input_cycle >= init_j && input_cycle < N + init_j) b_input[init_j] <= b_mem[input_cycle - init_j][init_j];
+                    else b_input[init_j] <= 8'sd0;
                 end
-
-                // Update counters after calculations
-                if (k < N - 1) begin
-                    k <= k + 1;
-                end else begin
-                    k <= 0;
-                    if (j < P - 1) begin
-                        j <= j + 1;
-                    end else begin
-                        j <= 0;
-                        if (i < M - 1) begin
-                            i <= i + 1;
-                        end else begin
-                            i <= 0;
-                        end
-                    end
-                end
-            end else if (state == S_IDLE && start) begin
-                i <= 0;
-                j <= 0;
-                k <= 0;
-                sum <= 0;
             end
         end
     end
-    
-    // Pack the result array back into result_c
-    always @(*) begin
-        for (pack_idx = 0; pack_idx < M*P; pack_idx = pack_idx + 1) begin
-            result_c[(pack_idx * DATA_WIDTH) +: DATA_WIDTH] = c_array[pack_idx];
+
+    // Put results into output vector
+    genvar pack_i, pack_j;
+    generate
+        for (pack_i = 0; pack_i < M; pack_i = pack_i + 1) begin
+            for (pack_j = 0; pack_j < P; pack_j = pack_j + 1) begin
+                assign result_c[((pack_i*P + pack_j)*DATA_WIDTH + DATA_WIDTH-1) : (pack_i*P + pack_j)*DATA_WIDTH] = c_result_wires[pack_i][pack_j][DATA_WIDTH-1:0];
+            end
         end
-    end
+    endgenerate
 
 endmodule
