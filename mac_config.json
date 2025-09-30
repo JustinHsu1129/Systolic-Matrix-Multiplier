@@ -1,0 +1,17 @@
+{
+  "DESIGN_NAME": "mac_unit",
+
+  "VERILOG_FILES": [
+    "dir::MAC.v"
+  ],
+
+  "CLOCK_PORT": "clk",
+  "CLOCK_PERIOD": 25,
+
+  "PLATFORM": "sky130",
+  "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
+  
+  "SYNTH_STRATEGY": "DELAY 0",
+  "SYNTH_BUFFERING": "1",
+  "SYNTH_SIZING": "1"
+}
