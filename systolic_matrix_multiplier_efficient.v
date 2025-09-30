@@ -1,148 +1,3 @@
-// Block RAM module
-module bram #(
-    parameter DATA_WIDTH = 8,
-    parameter ADDR_WIDTH = 10   
-)(
-    input clk,
-    input we,                             
-    input [ADDR_WIDTH-1:0] addr,
-    input [DATA_WIDTH-1:0] din,
-    output reg [DATA_WIDTH-1:0] dout
-);
-    // Memory array
-    reg [DATA_WIDTH-1:0] mem [(1<<ADDR_WIDTH)-1:0];
-
-    always @(posedge clk) begin
-        if (we) begin
-            mem[addr] <= din;            // write
-        end
-        dout <= mem[addr];               // read (sync)
-    end
-endmodule
-
-// Fixed Kogge-Stone Adder for efficient addition
-module kogge_stone_adder_16bit (
-    input [15:0] a,
-    input [15:0] b,
-    input cin,
-    output [15:0] sum,
-    output cout
-);
-    wire [15:0] g, p;
-    
-    // Generate and Propagate
-    assign g = a & b;
-    assign p = a ^ b;
-    
-    // Level 1
-    wire [15:0] g1, p1;
-    assign g1[0] = g[0];
-    assign p1[0] = p[0];
-    genvar i;
-    generate
-        for (i = 1; i < 16; i = i + 1) begin : level1
-            assign g1[i] = g[i] | (p[i] & g[i-1]);
-            assign p1[i] = p[i] & p[i-1];
-        end
-    endgenerate
-    
-    // Level 2
-    wire [15:0] g2, p2;
-    assign g2[1:0] = g1[1:0];
-    assign p2[1:0] = p1[1:0];
-    generate
-        for (i = 2; i < 16; i = i + 1) begin : level2
-            assign g2[i] = g1[i] | (p1[i] & g1[i-2]);
-            assign p2[i] = p1[i] & p1[i-2];
-        end
-    endgenerate
-    
-    // Level 3
-    wire [15:0] g3, p3;
-    assign g3[3:0] = g2[3:0];
-    assign p3[3:0] = p2[3:0];
-    generate
-        for (i = 4; i < 16; i = i + 1) begin : level3
-            assign g3[i] = g2[i] | (p2[i] & g2[i-4]);
-            assign p3[i] = p2[i] & p2[i-4];
-        end
-    endgenerate
-    
-    // Level 4
-    wire [15:0] g4, p4;
-    assign g4[7:0] = g3[7:0];
-    assign p4[7:0] = p3[7:0];
-    generate
-        for (i = 8; i < 16; i = i + 1) begin : level4
-            assign g4[i] = g3[i] | (p3[i] & g3[i-8]);
-            assign p4[i] = p3[i] & p3[i-8];
-        end
-    endgenerate
-    
-    // Fixed carry generation - each carry depends on previous carry
-    wire [16:0] carry;
-    assign carry[0] = cin;
-    assign carry[1] = g4[0] | (p4[0] & cin);
-    generate
-        for (i = 1; i < 16; i = i + 1) begin : carry_gen
-            assign carry[i+1] = g4[i] | (p4[i] & carry[i]); // Fixed: was carry[1]
-        end
-    endgenerate
-    
-    // Final sum
-    assign sum = p ^ carry[15:0];
-    assign cout = carry[16];
-endmodule
-
-// Simplified signed multiplier using built-in multiplication
-module signed_multiplier_8bit (
-    input signed [7:0] a,
-    input signed [7:0] b,
-    output signed [15:0] product
-);
-    // Use built-in signed multiplication for reliability
-    assign product = a * b;
-endmodule
-
-// Multiply-Accumulate Unit
-module mac_unit (
-    input clk,
-    input rst,
-    input signed [7:0] a,
-    input signed [7:0] b,
-    input signed [15:0] acc_in,
-    output reg signed [15:0] acc_out
-);
-    wire signed [15:0] mult_result;
-    wire [15:0] add_result;
-    wire cout;
-    
-    // Simplified signed multiplier
-    signed_multiplier_8bit multiplier (
-        .a(a),
-        .b(b),
-        .product(mult_result)
-    );
-    
-    // Kogge-Stone adder for accumulation
-    kogge_stone_adder_16bit accumulator (
-        .a(acc_in),
-        .b(mult_result),
-        .cin(1'b0),
-        .sum(add_result),
-        .cout(cout)
-    );
-    
-    always @(posedge clk or posedge rst) begin
-        if (rst) begin
-            acc_out <= 16'sd0;
-        end else begin
-            acc_out <= add_result;
-        end
-    end
-endmodule
-
-// Processing Element with MAC unit
 module processing_element (
     input clk,
     input rst,
@@ -150,18 +5,24 @@ module processing_element (
     input signed [7:0] b_in,
     output reg signed [7:0] a_out,
     output reg signed [7:0] b_out,
-    output reg signed [15:0] c_sum_out
+    output signed [15:0] c_sum_out
 );
+    // Internal accumulator register
+    reg signed [15:0] c_sum;
     wire signed [15:0] mult_result;
     wire signed [15:0] add_result;
     wire cout;
     
-    // Direct multiplication
-    assign mult_result = a_in * b_in;
+    // Instantiate Wallace tree multiplier
+    wallace_tree_8x8 multiplier (
+        .multiplicand(a_in),
+        .multiplier(b_in),
+        .product(mult_result)
+    );
     
-    // Kogge-Stone adder for accumulation
+    // Instantiate Kogge-Stone adder for accumulation
     kogge_stone_adder_16bit accumulator (
-        .a(c_sum_out),
+        .a(c_sum),
         .b(mult_result),
         .cin(1'b0),
         .sum(add_result),
@@ -172,21 +33,22 @@ module processing_element (
         if (rst) begin
             a_out <= 8'sd0;
             b_out <= 8'sd0;
-            c_sum_out <= 16'sd0;
+            c_sum <= 16'sd0;
         end else begin
-            // Pass through inputs to outputs (with 1 cycle delay)
+            // Pass through inputs to outputs (for systolic data flow)
             a_out <= a_in;
             b_out <= b_in;
             // Update accumulator
-            c_sum_out <= add_result;
+            c_sum <= add_result;
         end
     end
+    
+    assign c_sum_out = c_sum;
 endmodule
 
-// Systolic Matrix Multiplier - Top Level Module
 module systolic_matrix_multiplier #(
     parameter DATA_WIDTH = 8,
-    parameter RESULT_WIDTH = 16,  // Full width for results
+    parameter RESULT_WIDTH = 16,  // Added parameter for result width
     parameter M = 8,
     parameter N = 8,
     parameter P = 8
@@ -197,10 +59,10 @@ module systolic_matrix_multiplier #(
     input [M*N*DATA_WIDTH-1:0] matrix_a,
     input [N*P*DATA_WIDTH-1:0] matrix_b,
     output reg done,
-    output [M*P*RESULT_WIDTH-1:0] result_c  // Changed to full width
+    output [M*P*RESULT_WIDTH-1:0] result_c  // Fixed: removed duplicate declaration and changed width
 );
 
-    // States
+    // Simplified state machine
     localparam S_IDLE = 2'b00;
     localparam S_COMPUTE = 2'b01;
     localparam S_DONE = 2'b10;
@@ -208,23 +70,22 @@ module systolic_matrix_multiplier #(
     reg [1:0] state, next_state;
     reg [7:0] cycle_count;
 
-    // Unpack input matrices
     wire signed [DATA_WIDTH-1:0] a_mem [0:M-1][0:N-1];
     wire signed [DATA_WIDTH-1:0] b_mem [0:N-1][0:P-1];
 
-    // Systolic array interconnections
-    wire signed [DATA_WIDTH-1:0] a_h [0:M-1][0:P];  // Horizontal A flow
-    wire signed [DATA_WIDTH-1:0] b_v [0:M][0:P-1];  // Vertical B flow
+    // Interconnections
+    wire signed [DATA_WIDTH-1:0] a_h [0:M-1][0:P];
+    wire signed [DATA_WIDTH-1:0] b_v [0:M][0:P-1];
     
-    wire signed [RESULT_WIDTH-1:0] c_result_wires [0:M-1][0:P-1];
+    wire signed [15:0] c_result_wires [0:M-1][0:P-1];
 
-    // Input shift registers for proper systolic timing
-    reg signed [DATA_WIDTH-1:0] a_shift [0:M-1][0:M-1];  // M stages for each row
-    reg signed [DATA_WIDTH-1:0] b_shift [0:P-1][0:P-1];  // P stages for each column
+    reg signed [DATA_WIDTH-1:0] a_input [0:M-1];
+    reg signed [DATA_WIDTH-1:0] b_input [0:P-1];
+    reg [7:0] input_cycle;
     
-    integer i, j, k;
+    integer init_i, init_j;
 
-    // Generate the M x P systolic array
+    // Generate the M x P systolic array with structural MAC units
     genvar row, col;
     generate
         for (row = 0; row < M; row = row + 1) begin : pe_rows
@@ -242,36 +103,32 @@ module systolic_matrix_multiplier #(
         end
     endgenerate
 
-    // Connect shift register outputs to systolic array inputs
+    // Connect inputs to the systolic array's edges
     generate
-        for (row = 0; row < M; row = row + 1) begin
-            assign a_h[row][0] = a_shift[row][M-1];  // Output of shift register
+        for (row = 0; row < M; row = row + 1) begin : connect_a
+            assign a_h[row][0] = a_input[row];
         end
-        for (col = 0; col < P; col = col + 1) begin
-            assign b_v[0][col] = b_shift[col][P-1];  // Output of shift register
+        for (col = 0; col < P; col = col + 1) begin : connect_b
+            assign b_v[0][col] = b_input[col];
         end
     endgenerate
 
     // Unpack input vectors into 2D arrays
     genvar unpack_i, unpack_j;
     generate
-        for (unpack_i = 0; unpack_i < M; unpack_i = unpack_i + 1) begin
-            for (unpack_j = 0; unpack_j < N; unpack_j = unpack_j + 1) begin
-                assign a_mem[unpack_i][unpack_j] = 
-                    matrix_a[((unpack_i*N + unpack_j)*DATA_WIDTH + DATA_WIDTH-1) : 
-                            (unpack_i*N + unpack_j)*DATA_WIDTH];
+        for (unpack_i = 0; unpack_i < M; unpack_i = unpack_i + 1) begin : unpack_a_rows
+            for (unpack_j = 0; unpack_j < N; unpack_j = unpack_j + 1) begin : unpack_a_cols
+                assign a_mem[unpack_i][unpack_j] = matrix_a[((unpack_i*N + unpack_j)*DATA_WIDTH + DATA_WIDTH-1) : (unpack_i*N + unpack_j)*DATA_WIDTH];
             end
         end
-        for (unpack_i = 0; unpack_i < N; unpack_i = unpack_i + 1) begin
-            for (unpack_j = 0; unpack_j < P; unpack_j = unpack_j + 1) begin
-                assign b_mem[unpack_i][unpack_j] = 
-                    matrix_b[((unpack_i*P + unpack_j)*DATA_WIDTH + DATA_WIDTH-1) : 
-                            (unpack_i*P + unpack_j)*DATA_WIDTH];
+        for (unpack_i = 0; unpack_i < N; unpack_i = unpack_i + 1) begin : unpack_b_rows
+            for (unpack_j = 0; unpack_j < P; unpack_j = unpack_j + 1) begin : unpack_b_cols
+                assign b_mem[unpack_i][unpack_j] = matrix_b[((unpack_i*P + unpack_j)*DATA_WIDTH + DATA_WIDTH-1) : (unpack_i*P + unpack_j)*DATA_WIDTH];
             end
         end
     endgenerate
 
-    // State machine
+    // State machine - sequential logic
     always @(posedge clk or posedge rst) begin
         if (rst) 
             state <= S_IDLE;
@@ -279,92 +136,92 @@ module systolic_matrix_multiplier #(
             state <= next_state;
     end
 
+    // State machine - combinational logic
     always @(*) begin
         next_state = state;
         case (state)
-            S_IDLE: 
+            S_IDLE: begin
                 if (start) 
                     next_state = S_COMPUTE;
+            end
             
-            S_COMPUTE: 
-                // Need more cycles for proper systolic operation
-                if (cycle_count >= (M + N + P + 5)) 
+            S_COMPUTE: begin
+                if (cycle_count >= (M + N + P - 2)) 
                     next_state = S_DONE;
+            end
             
-            S_DONE: 
+            S_DONE: begin
                 next_state = S_IDLE;
+            end
             
-            default: 
-                next_state = S_IDLE;
+            default: next_state = S_IDLE;
         endcase
     end
 
-    always @(*) begin
-        done = (state == S_DONE);
+    // Done signal generation
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            done <= 1'b0;
+        else if (state == S_DONE)
+            done <= 1'b1;
+        else
+            done <= 1'b0;
     end
 
-    // Control logic with proper systolic timing
+    // Control logic
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             cycle_count <= 0;
-            
-            // Initialize shift registers
-            for (i = 0; i < M; i = i + 1) begin
-                for (j = 0; j < M; j = j + 1) begin
-                    a_shift[i][j] <= 8'sd0;
-                end
-            end
-            for (i = 0; i < P; i = i + 1) begin
-                for (j = 0; j < P; j = j + 1) begin
-                    b_shift[i][j] <= 8'sd0;
-                end
-            end
-            
-        end else if (state == S_IDLE && start) begin
-            cycle_count <= 0;
-            
-        end else if (state == S_COMPUTE) begin
-            cycle_count <= cycle_count + 1;
-            
-            // Shift register operation for matrix A (horizontal flow)
-            for (i = 0; i < M; i = i + 1) begin
-                // Shift existing values right
-                for (j = M-1; j > 0; j = j - 1) begin
-                    a_shift[i][j] <= a_shift[i][j-1];
+            input_cycle <= 0;
+            for (init_i = 0; init_i < M; init_i = init_i + 1) 
+                a_input[init_i] <= 8'sd0;
+            for (init_j = 0; init_j < P; init_j = init_j + 1) 
+                b_input[init_j] <= 8'sd0;
+        end else begin
+            case (state)
+                S_IDLE: begin
+                    if (start) begin
+                        cycle_count <= 0;
+                        input_cycle <= 0;
+                    end
                 end
                 
-                // Input new value with proper timing - row i starts at cycle i
-                if (cycle_count >= i && cycle_count < (N + i)) begin
-                    a_shift[i][0] <= a_mem[i][cycle_count - i];
-                end else begin
-                    a_shift[i][0] <= 8'sd0;
-                end
-            end
-            
-            // Shift register operation for matrix B (vertical flow)  
-            for (i = 0; i < P; i = i + 1) begin
-                // Shift existing values down
-                for (j = P-1; j > 0; j = j - 1) begin
-                    b_shift[i][j] <= b_shift[i][j-1];
+                S_COMPUTE: begin
+                    cycle_count <= cycle_count + 1;
+                    
+                    // Feed data into systolic array with proper skewing
+                    for (init_i = 0; init_i < M; init_i = init_i + 1) begin
+                        if (input_cycle >= init_i && input_cycle < N + init_i) 
+                            a_input[init_i] <= a_mem[init_i][input_cycle - init_i];
+                        else 
+                            a_input[init_i] <= 8'sd0;
+                    end
+                    
+                    for (init_j = 0; init_j < P; init_j = init_j + 1) begin
+                        if (input_cycle >= init_j && input_cycle < N + init_j) 
+                            b_input[init_j] <= b_mem[input_cycle - init_j][init_j];
+                        else 
+                            b_input[init_j] <= 8'sd0;
+                    end
+                    
+                    input_cycle <= input_cycle + 1;
                 end
                 
-                // Input new value with proper timing - column i starts at cycle i
-                if (cycle_count >= i && cycle_count < (N + i)) begin
-                    b_shift[i][0] <= b_mem[cycle_count - i][i];
-                end else begin
-                    b_shift[i][0] <= 8'sd0;
+                S_DONE: begin
+                    // Hold final values
+                    cycle_count <= 0;
+                    input_cycle <= 0;
                 end
-            end
+            endcase
         end
     end
 
-    // Pack results into output vector with full width
+    // Pack results into output vector (full 16-bit results)
     genvar pack_i, pack_j;
     generate
-        for (pack_i = 0; pack_i < M; pack_i = pack_i + 1) begin
-            for (pack_j = 0; pack_j < P; pack_j = pack_j + 1) begin
-                assign result_c[((pack_i*P + pack_j)*RESULT_WIDTH + RESULT_WIDTH-1) : 
-                               (pack_i*P + pack_j)*RESULT_WIDTH] = c_result_wires[pack_i][pack_j];
+        for (pack_i = 0; pack_i < M; pack_i = pack_i + 1) begin : pack_rows
+            for (pack_j = 0; pack_j < P; pack_j = pack_j + 1) begin : pack_cols
+                assign result_c[((pack_i*P + pack_j)*RESULT_WIDTH + RESULT_WIDTH-1) : (pack_i*P + pack_j)*RESULT_WIDTH] = c_result_wires[pack_i][pack_j];
             end
         end
     endgenerate
