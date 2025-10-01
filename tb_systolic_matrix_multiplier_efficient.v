@@ -124,8 +124,19 @@ module tb_systolic_matrix_multiplier;
 
         if (error_count == 0) begin
             $display("\nSUCCESS: All %0d elements match the expected result!", M*P);
-            $display("  --> Expected: %h (%d), DUT Result: %h (%d)", 
-                             expected_c[i][j], expected_c[i][j], dut_val, dut_val);
+        
+            for (i = 0; i < M; i = i + 1) begin
+                for (j = 0; j < P; j = j + 1) begin
+                    dut_val = result_c_tb[((i*P + j) * RESULT_WIDTH) +: RESULT_WIDTH];  // Fixed: Use RESULT_WIDTH for indexing
+                    if (dut_val == expected_c[i][j]) begin
+                        $display("Matrix cell [%0d][%0d]!", i, j);
+                        $display("  --> Expected: %h (%d), DUT Result: %h (%d)", 
+                                expected_c[i][j], expected_c[i][j], dut_val, dut_val);
+                        error_count = error_count + 1;
+                    end
+                end
+            end
+
         end else begin
             $display("\nFAILURE: Found %0d mismatches.", error_count);
         end
