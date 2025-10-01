@@ -124,6 +124,8 @@ module tb_systolic_matrix_multiplier;
 
         if (error_count == 0) begin
             $display("\nSUCCESS: All %0d elements match the expected result!", M*P);
+            $display("  --> Expected: %h (%d), DUT Result: %h (%d)", 
+                             expected_c[i][j], expected_c[i][j], dut_val, dut_val);
         end else begin
             $display("\nFAILURE: Found %0d mismatches.", error_count);
         end
