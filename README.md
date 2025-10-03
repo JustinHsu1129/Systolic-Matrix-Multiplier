@@ -8,15 +8,22 @@ Yeah after looking at the matrix multiplier made in EEC 180, probably only gonna
 ## Matrix Multiplication
 ![Matrix mult](Images/Matrix%20mult.png)
 
-## Systolic Matrix Multiplication
+## Systolic Matrix Multiplication-behavioral
 ![Systolic mult](Images/Systolic%20mult.png)
 
 As we can see, the normal matrix multiplication for an 8x8 matrix takes well over 5,000,000ns, whereas the systolic version takes just over 200ns. The systolic matrix multiplication is around ~x25,000 faster than the normal matrix multiplier. This is due to the inherent nature of systolic matrix multiplication. Normal matrix multiplication is done in a "nested loops" way, with lots of memory accesses and waiting for things to finish. This is incredibly slow, and is reflected in the overall computation time (5,000,000ns is 0.005s). Systolic multiplication uses a grid of processing elements that pass the resultant data along to the next processing element, bypassing the need for memory accesses and thus drastically improving calculation time.
 
 # Layout
 
-In hindsight, running layout on a massively parallel system with a bunch of multiply accumulate units on a laptop was not the brightest idea I've had. Oops!
+I am still working on improving the layout. Right now there are two versions of the design-a structural version and a behaioral version. The structural version uses multiply accumulate modules inspired by [this](https://ieeexplore.ieee.org/document/10435014) paper. It uses a radix-2 kogge stone adder and a wallace tree multiplier implementing Booth's alogrithm defined strucutrally in each multiply accumulate module. The idea of this structural design was to optimize for power efficiency while retaining high throughput via wide parallelism. In the second version of the design, the multply accumulate modules are designed behaviorally, leaving it up to the synthesizer to infer what design should be used. As a result this behavioral design is much more area efficient as opposed to the structural design. Both of the designs shown below are full RTL-to-GDSII flows done exclusively in OpenLane2. My future work includes using Synopsys ICC2 to layout my synthesized design from Design Compiler, as well as making hardened macros for each processing element and multiply accumulate module to create a fully custom layout.
 
+# Gate level Layout (Design Compiler)
+![layout](Images/systolic%20matrix%20multiplier.png)
+
+# Structural Layout
+![layout](Images/systolic_efficient.png)
+
+# Behavioral Layout
 ![layout](Images/Layout.png)
 
 ## Placement Density
